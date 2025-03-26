@@ -1,0 +1,65 @@
+model OptiConsult
+uses "mmxprs"
+
+declarations
+    NumProjects = 13
+    Projects = 1..NumProjects
+
+    ConsultantNames: set of string
+    HomeLocationNames: set of string
+    ProjectLocationNames: set of string
+
+    DailySalary: array(ConsultantNames) of real
+    BenchLimits: array(ConsultantNames) of real
+    Hierarchy: array(ConsultantNames) of integer
+    TotalConsultants: array(ConsultantNames) of integer
+    WorkingDays: integer
+    TotalTravelBudget: real
+
+    ConsultantsByHomeLocationAndLevelOld: array(ProjectLocationNames, ConsultantNames) of integer
+    TravelCosts: array(ProjectLocationNames, ProjectLocationNames) of real
+    ProjectLocations: array(Projects) of integer
+    Demand: array(Projects, ConsultantNames) of integer
+    DailyRate: array(Projects, ConsultantNames) of real
+    DailyRatePerLocation: array(ProjectLocationNames, ConsultantNames) of real
+
+    ! 2D array of decision vars: assigned location and assigned level
+    AssignedAtLocationAndLevel: array(ProjectLocationNames, ConsultantNames) of mpvar
+    LocationLevelDifference: array(ProjectLocationNames, ConsultantNames) of mpvar
+
+    ! will need more for bench
+    ! possibly split into assignedHome and assignedAway after?
+end-declarations
+
+initializations from "OptiConsult.dat"
+    ConsultantNames HomeLocationNames ProjectLocationNames
+    TotalConsultants DailySalary BenchLimits WorkingDays TotalTravelBudget
+    ConsultantsByHomeLocationAndLevelOld
+    TravelCosts ProjectLocations
+    Demand DailyRate DailyRatePerLocation
+end-initializations
+
+
+Salaries := sum(c in ConsultantNames) (TotalConsultants(c) * DailySalary(c) * WorkingDays)
+Revenue := sum(loc in ProjectLocationNames, c in ConsultantNames)
+                (AssignedAtLocationAndLevel(loc, c) * DailyRatePerLocation(loc, c) * WorkingDays)
+
+LocationLevelDifference = AssignedAtLocationAndLevel - ConsultantsByHomeLocationAndLevelOld
+TravelCost := sum(loc in ProjectLocationNames,
+                    c in ConsultantNames | LocationLevelDifference(loc, c) > 0)
+                    LocationLevelDifference(loc, c) * TravelCosts(loc, c)
+
+TotalProfit := Revenue - Salaries - TravelCosts
+
+! ====== Constraints
+
+
+
+
+
+
+! ====== Solve
+maximize(TotalProfit)
+
+
+end-model
