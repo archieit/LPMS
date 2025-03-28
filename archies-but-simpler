@@ -73,11 +73,10 @@ end-do
 ! 4. Travel budget constraint
 TravelBudgetCS := TravelCost <= TotalTravelBudget
 
-! 5. Hierarchy constraint: don't assign people above their role
-forall(l_a in ConsultantNames, l_d in ConsultantNames) do
-    HierarchyCS := Hierarchy(l_a) <= Hierarchy(l_d)
+! 5. Hierarchy constraint: don't assign people above their roles
+forall(h in HomeLocationNames, l_a in ConsultantNames, p in Projects, l_d in ConsultantNames) do
+    HierarchyCS(h, l_a, p, l_d) := Assign(h, l_a, p, l_d) * Hierarchy(l_a) <= Assign(h, l_a, p, l_d) * Hierarchy(l_d)
 end-do
-
 
 ! --- Solve ---
 maximize(TotalProfit)
@@ -93,7 +92,7 @@ writeln
 writeln("Consultant Allocations by Project")
 forall(p in Projects) do
     writeln("Project ", p,  " (", ProjectLocationNames(ProjectLocations(p)), "):")
-    forall(h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d)) do
+    forall(h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames) do
         if getsol(Assign(h, l_a, p, l_d)) > 0.001 then
             writeln("  ", strfmt(getsol(Assign(h, l_a, p, l_d)), -3), strfmt(l_a, -25), " => ", strfmt(l_d, -25), " (", h, ")")
         end-if
@@ -105,7 +104,7 @@ writeln("Demand Fulfilment by Project and Level")
 forall(p in Projects) do
     writeln("Project ", p, ":")
     forall(l_d in ConsultantNames) do
-        Fulfilled := sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d))
+        Fulfilled := sum(h in HomeLocationNames, l_a in ConsultantNames)
                         getsol(Assign(h, l_a, p, l_d))
         writeln("  ", strfmt(l_d, -25), ": ", strfmt(Fulfilled, -2), " of ", Demand(p, l_d))
     end-do
@@ -116,7 +115,7 @@ writeln("Consultants Who Travelled for Project Assignments")
 forall(p in Projects) do
     projLoc := ProjectLocationNames(ProjectLocations(p))
 
-    forall(h in HomeLocationNames | h <> projLoc, l_a in ConsultantNames, l_d in ConsultantNames) do
+    forall(h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames) do
         if getsol(Assign(h, l_a, p, l_d)) > 0.01 then
             writeln(strfmt(getsol(Assign(h, l_a, p, l_d)), -3), strfmt(l_d, -25), ": ", strfmt(h, -13),  " => ", projLoc, " (Project ", strfmt(p, -2), ")")
         end-if
