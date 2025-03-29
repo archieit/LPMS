@@ -16,7 +16,7 @@ declarations
     WorkingDays: integer
     TotalTravelBudget: real
 
-    ConsultantsByHomeLocationAndLevel: array(ProjectLocationNames, ConsultantNames) of integer
+    ConsultantsByHomeLocationAndLevel: array(HomeLocationNames, ConsultantNames) of integer
     TravelCosts: array(ProjectLocationNames, ProjectLocationNames) of real
     ProjectLocations: array(Projects) of integer
     Demand: array(Projects, ConsultantNames) of integer
@@ -26,7 +26,7 @@ declarations
     Bench: array(HomeLocationNames, ConsultantNames) of mpvar
 end-declarations
 
-initializations from "OptiConsultNew.dat"
+initializations from "OptiConsult_s1.dat"
     ConsultantNames HomeLocationNames ProjectLocationNames
     TotalConsultants DailySalary BenchLimits WorkingDays TotalTravelBudget
     ConsultantsByHomeLocationAndLevel TravelCosts ProjectLocations
