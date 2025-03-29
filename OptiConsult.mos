@@ -9,13 +9,14 @@ declarations
     HomeLocationNames: set of string
     ProjectLocationNames: set of string
 
+    TotalConsultants: array(ConsultantNames) of real
     DailySalary: array(ConsultantNames) of real
     BenchLimits: array(ConsultantNames) of real
     Hierarchy: array(ConsultantNames) of integer
     WorkingDays: integer
     TotalTravelBudget: real
 
-    ConsultantsByHomeLocationAndLevel: array(HomeLocationNames, ConsultantNames) of integer
+    ConsultantsByHomeLocationAndLevel: array(ProjectLocationNames, ConsultantNames) of integer
     TravelCosts: array(ProjectLocationNames, ProjectLocationNames) of real
     ProjectLocations: array(Projects) of integer
     Demand: array(Projects, ConsultantNames) of integer
@@ -25,9 +26,9 @@ declarations
     Bench: array(HomeLocationNames, ConsultantNames) of mpvar
 end-declarations
 
-initializations from "OptiConsult_s1.dat"
+initializations from "OptiConsultNew.dat"
     ConsultantNames HomeLocationNames ProjectLocationNames
-    DailySalary BenchLimits WorkingDays TotalTravelBudget
+    TotalConsultants DailySalary BenchLimits WorkingDays TotalTravelBudget
     ConsultantsByHomeLocationAndLevel TravelCosts ProjectLocations
     Demand DailyRate
 end-initializations
@@ -41,27 +42,29 @@ Hierarchy("Junior Consultant") := 5
 
 ! --- Objective: maximise profit ---
 
+! l_d is what they are assigned to, l_a is their actual role
+
 ! Revenue: consultants generate revenue based on the role they are fulfilling
 Revenue := sum(p in Projects, l_d in ConsultantNames)(sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d)) Assign(h, l_a, p, l_d) * DailyRate(p, l_d)) * WorkingDays
 
 ! Salary: based on consultants' actual levels
-SalaryCost := sum(h in HomeLocationNames, l in ConsultantNames)(ConsultantsByHomeLocationAndLevel(h, l) * DailySalary(l) * WorkingDays)
+SalaryCost := sum(c in ConsultantNames) TotalConsultants(c) * DailySalary(c) * WorkingDays
 
 ! Travel cost: only if project location differs from home location
-TravelCost := sum(p in Projects, h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d) and h <> ProjectLocationNames(ProjectLocations(p))) (Assign(h, l_a, p, l_d) * TravelCosts(h, ProjectLocationNames(ProjectLocations(p))))
+TravelCost := sum(p in Projects, h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d)) (Assign(h, l_a, p, l_d) * TravelCosts(ProjectLocationNames(ProjectLocations(p)), h))
 
 TotalProfit := Revenue - SalaryCost - TravelCost
 
 ! --- Constraints ---
 
 ! 1. Supply: each consultant must be assigned to a role or benched
-forall(h in HomeLocationNames, l in ConsultantNames) do
-    SupplyCS(h, l) := sum(p in Projects, l_d in ConsultantNames | Hierarchy(l) <= Hierarchy(l_d)) Assign(h, l, p, l_d) + Bench(h, l) = ConsultantsByHomeLocationAndLevel(h, l)
+forall(h in HomeLocationNames, l_a in ConsultantNames) do
+    SupplyCS(h, l_a) := sum(p in Projects, l_d in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d)) Assign(h, l_a, p, l_d) + Bench(h, l_a) = ConsultantsByHomeLocationAndLevel(h, l_a)
 end-do
 
 ! 2. Bench limit (except Junior Consultants who have limit 1)
-forall(h in HomeLocationNames, l in ConsultantNames) do
-    BenchLimitCS(h, l) := Bench(h, l) <= BenchLimits(l) * ConsultantsByHomeLocationAndLevel(h, l)
+forall(h in HomeLocationNames, l_a in ConsultantNames) do
+    BenchLimitCS(h, l_a) := Bench(h, l_a) <= BenchLimits(l_a) * ConsultantsByHomeLocationAndLevel(h, l_a)
 end-do
 
 ! 3. Demand cap: don’t overfill any project role
@@ -71,6 +74,7 @@ end-do
 
 ! 4. Travel budget constraint
 TravelBudgetCS := TravelCost <= TotalTravelBudget
+
 
 
 ! --- Solve ---
@@ -87,7 +91,7 @@ writeln
 writeln("Consultant Allocations by Project")
 forall(p in Projects) do
     writeln("Project ", p,  " (", ProjectLocationNames(ProjectLocations(p)), "):")
-    forall(h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d)) do
+    forall(h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames) do
         if getsol(Assign(h, l_a, p, l_d)) > 0.001 then
             writeln("  ", strfmt(getsol(Assign(h, l_a, p, l_d)), -3), strfmt(l_a, -25), " => ", strfmt(l_d, -25), " (", h, ")")
         end-if
@@ -99,7 +103,7 @@ writeln("Demand Fulfilment by Project and Level")
 forall(p in Projects) do
     writeln("Project ", p, ":")
     forall(l_d in ConsultantNames) do
-        Fulfilled := sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d)) 
+        Fulfilled := sum(h in HomeLocationNames, l_a in ConsultantNames)
                         getsol(Assign(h, l_a, p, l_d))
         writeln("  ", strfmt(l_d, -25), ": ", strfmt(Fulfilled, -2), " of ", Demand(p, l_d))
     end-do
@@ -110,12 +114,20 @@ writeln("Consultants Who Travelled for Project Assignments")
 forall(p in Projects) do
     projLoc := ProjectLocationNames(ProjectLocations(p))
 
-    forall(h in HomeLocationNames | h <> projLoc, l_a in ConsultantNames, l_d in ConsultantNames) do
+    forall(h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames) do
         if getsol(Assign(h, l_a, p, l_d)) > 0.01 then
             writeln(strfmt(getsol(Assign(h, l_a, p, l_d)), -3), strfmt(l_d, -25), ": ", strfmt(h, -13),  " => ", projLoc, " (Project ", strfmt(p, -2), ")")
         end-if
     end-do
 end-do
 
+writeln
+writeln("Benched Consultants")
+forall(l_a in ConsultantNames) do
+  BenchedConsultants := sum(l in HomeLocationNames) getsol(Bench(l, l_a))
+  writeln(BenchedConsultants, " ", strfmt(l_a, -25))
+end-do
+
+writeln(SalaryCost)
 
 end-model
