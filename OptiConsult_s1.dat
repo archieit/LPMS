@@ -19,11 +19,10 @@ ProjectLocations: [3 3 3 1 1 1 1 1 2 2 4 4 4]  ! Maps projects to locations (1: 
 
 ! Number of Consultants by Home Location and Level
 ConsultantsByHomeLocationAndLevelOld:  [1 32 31 31 8    !Scotland
-                                     6 48 43 43 9    !London
-                                     1 40 26 46 13   !North England
-                                     0 0 0 0 0]      !Republic of Ireland
+                                        6 48 43 43 9    !London
+                                        1 40 26 46 13   !North England
+                                        0 0 0 0 0]      !Republic of Ireland
 
-! Number of Consultants by Home Location and Level
 ConsultantsByHomeLocationAndLevel:  [6 48 43 43 9    !London
                                      1 40 26 46 13   !North England
                                      1 32 31 31 8]   !Scotland
@@ -55,4 +54,3 @@ DailyRate: [650 516 450 380 205
             640 495 440 370 190
             640 495 440 370 190
             640 495 440 370 190]
-
