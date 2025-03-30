@@ -157,4 +157,89 @@ forall(l_d in ConsultantNames, p in ProjectLocationNames) do
     writeln(Pref)
 end-do
 
+
+writeln
+writeln("Total Revenue: £", getsol(Revenue))
+writeln("Total Salary Cost: £", getsol(SalaryCost))
+writeln("Total Travel Cost: £", getsol(TravelCost))
+writeln("Total Profit: £", getobjval)
+
+writeln
+writeln("Consultant Allocations by Project")
+forall(p in Projects) do
+    writeln("Project ", p,  " (", ProjectLocationNames(ProjectLocations(p)), "):")
+    forall(h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames) do
+        if getsol(Assign(h, l_a, p, l_d)) > 0.001 then
+            writeln("  ", strfmt(getsol(Assign(h, l_a, p, l_d)), -3), strfmt(l_a, -25), " => ", strfmt(l_d, -25), " (", h, ")")
+        end-if
+    end-do
+end-do
+
+writeln
+writeln("Demand Fulfilment by Project and Level")
+forall(p in Projects) do
+    writeln("Project ", p, ":")
+    forall(l_d in ConsultantNames) do
+        Fulfilled := sum(h in HomeLocationNames, l_a in ConsultantNames)
+                        getsol(Assign(h, l_a, p, l_d))
+        writeln("  ", strfmt(l_d, -25), ": ", strfmt(Fulfilled, -2), " of ", Demand(p, l_d))
+    end-do
+end-do
+
+writeln
+writeln("Consultants Who Travelled for Project Assignments")
+forall(p in Projects) do
+    projLoc := ProjectLocationNames(ProjectLocations(p))
+
+    forall(h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames) do
+        if getsol(Assign(h, l_a, p, l_d)) > 0.01 then
+            writeln(strfmt(getsol(Assign(h, l_a, p, l_d)), -3), strfmt(l_d, -25), ": ", strfmt(h, -13),  " => ", projLoc, " (Project ", strfmt(p, -2), ")")
+        end-if
+    end-do
+end-do
+
+writeln
+writeln("Benched Consultants")
+forall(l_a in ConsultantNames) do
+  BenchedConsultants := sum(l in HomeLocationNames) getsol(Bench(l, l_a))
+  writeln(BenchedConsultants, " ", strfmt(l_a, -25))
+end-do
+
+writeln(SalaryCost)
+
+fopen("ConsultantAllocation_TravelRestrictions.csv", F_OUTPUT)
+
+maximize(TotalProfit)
+! Write headers
+writeln("Type,Project,Consultant Role,Home Location,Assigned Role,Allocation Location,Quantity,Daily Rate,Daily Salary,Travel Cost")
+
+! Write assignment details
+forall(p in Projects) do
+  forall(h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames) do
+    if getsol(Assign(h, l_a, p, l_d)) > 0 then
+      writeln("Assignment,",p,",",l_a,",",h,",",l_d,",",ProjectLocationNames(ProjectLocations(p)),",",
+              strfmt(getsol(Assign(h, l_a, p, l_d)),0,2),",",
+              DailyRate(p, l_d),",",DailySalary(l_a),",",
+              TravelCosts(ProjectLocationNames(ProjectLocations(p)), h))
+    end-if
+  end-do
+end-do
+
+! Write bench details
+forall(h in HomeLocationNames, l_a in ConsultantNames) do
+  if getsol(Bench(h, l_a)) > 0 then
+    writeln("Bench,,",l_a,",",h,",,,",strfmt(getsol(Bench(h, l_a)),0,2),",,",
+            DailySalary(l_a),",0")
+  end-if
+end-do
+
+! Write summary section
+writeln
+writeln("SUMMARY")
+writeln("Total Revenue,", getsol(Revenue))
+writeln("Total Salary Cost,", getsol(SalaryCost))
+writeln("Total Travel Cost,", getsol(TravelCost))
+writeln("Total Profit,", getobjval)
+
+fclose(F_OUTPUT)
 end-model
