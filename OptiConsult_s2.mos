@@ -21,16 +21,21 @@ declarations
     Demand: array(Projects, ConsultantNames) of integer
     DemandVariability: real
     DailyRate: array(Projects, ConsultantNames) of real
+    ClientSatisfactionPenalty: array(ConsultantNames) of real
+    OutsourcingCost: array(ConsultantNames) of real
 
     Assign: array(HomeLocationNames, ConsultantNames, Projects, ConsultantNames) of mpvar
     Bench: array(HomeLocationNames, ConsultantNames) of mpvar
+    Unfulfilled: array(Projects, ConsultantNames) of mpvar
+    Outsource: array(Projects, ConsultantNames) of mpvar
 end-declarations
 
 initializations from "OptiConsult_s2.dat"
     ConsultantNames HomeLocationNames ProjectLocationNames
     DailySalary BenchLimits WorkingDays TotalTravelBudget
     ConsultantsByHomeLocationAndLevel TravelCosts ProjectLocations
-    Demand DailyRate DemandVariability
+    Demand DailyRate DemandVariability ClientSatisfactionPenalty 
+    OutsourcingCost
 end-initializations
 
 ! Hierarchy levels
@@ -45,10 +50,17 @@ forall(p in Projects, l in ConsultantNames) do
     AdjustedDemand(p, l) := round(Demand(p, l) * (1 + DemandVariability))
 end-do
 
+! Unfulfilled penalty 
+UnfulfilledPenalty := sum(p in Projects, l in ConsultantNames) Unfulfilled(p, l) * DailySalary(l) * ClientSatisfactionPenalty(l) * WorkingDays
+
+! Outsource Cost
+OutsourceCost := sum(p in Projects, l in ConsultantNames) Outsource(p, l) * DailySalary(l) * OutsourcingCost(l) * WorkingDays
+
+
 ! --- Objective: maximise profit ---
 
 ! Revenue: consultants generate revenue based on the role they are fulfilling
-Revenue := sum(p in Projects, l_d in ConsultantNames)(sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d)) Assign(h, l_a, p, l_d) * DailyRate(p, l_d)) * WorkingDays
+Revenue := sum(p in Projects, l_d in ConsultantNames)((sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d)) Assign(h, l_a, p, l_d) + Outsource(p, l_d)) * DailyRate(p, l_d)) * WorkingDays
 
 ! Salary: based on consultants' actual levels
 SalaryCost := sum(h in HomeLocationNames, l in ConsultantNames)(ConsultantsByHomeLocationAndLevel(h, l) * DailySalary(l) * WorkingDays)
@@ -56,7 +68,7 @@ SalaryCost := sum(h in HomeLocationNames, l in ConsultantNames)(ConsultantsByHom
 ! Travel cost: only if project location differs from home location
 TravelCost := sum(p in Projects, h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d) and h <> ProjectLocationNames(ProjectLocations(p))) (Assign(h, l_a, p, l_d) * TravelCosts(h, ProjectLocationNames(ProjectLocations(p))))
 
-TotalProfit := Revenue - SalaryCost - TravelCost
+TotalProfit := Revenue - SalaryCost - TravelCost - UnfulfilledPenalty - OutsourceCost
 
 ! --- Constraints ---
 
@@ -71,9 +83,11 @@ forall(h in HomeLocationNames, l in ConsultantNames) do
 end-do
 
 ! 3. Demand cap: don’t overfill any project role (based on adjusted demand)
-forall(p in Projects, l_d in ConsultantNames) do
-    DemandCS(p, l_d) := sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d)) Assign(h, l_a, p, l_d) <= AdjustedDemand(p, l_d)
+forall(p in Projects, l in ConsultantNames) do
+    DemandCS(p, l) := sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l)) Assign(h, l_a, p, l) + Outsource(p, l) + Unfulfilled(p, l) = AdjustedDemand(p, l)
 end-do
+
+
 
 ! 4. Travel budget constraint
 TravelBudgetCS := TravelCost <= TotalTravelBudget
@@ -90,38 +104,213 @@ writeln("Total Travel Cost: £", getsol(TravelCost))
 writeln("Total Profit: £", getobjval)
 
 writeln
-writeln("Consultant Allocations by Project")
+writeln("===== Consultant Allocations by Project =====")
 forall(p in Projects) do
     writeln("Project ", p,  " (", ProjectLocationNames(ProjectLocations(p)), "):")
-    forall(h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d)) do
+    forall(h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames) do
         if getsol(Assign(h, l_a, p, l_d)) > 0.001 then
-            writeln("  ", strfmt(getsol(Assign(h, l_a, p, l_d)), -3), strfmt(l_a, -25), " => ", strfmt(l_d, -25), " (", h, ")")
+            writeln("  ", strfmt(getsol(Assign(h, l_a, p, l_d)), 3, 0), "  ", strfmt(l_a, -25), " => ", strfmt(l_d, -25), " (", h, ")")
         end-if
     end-do
 end-do
 
 writeln
-writeln("Demand Fulfilment by Project and Level")
+writeln("===== Demand Fulfilment Summary =====")
 forall(p in Projects) do
-    writeln("Project ", p, ":")
+    writeln("Project ", p, " (", ProjectLocationNames(ProjectLocations(p)), "):")
     forall(l_d in ConsultantNames) do
-        Fulfilled := sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d)) 
+        Fulfilled := sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d))
                         getsol(Assign(h, l_a, p, l_d))
-        writeln("  ", strfmt(l_d, -25), ": ", strfmt(Fulfilled, -2), " of ", AdjustedDemand(p, l_d))
+        Outsourced := getsol(Outsource(p, l_d))
+        Unmet := getsol(Unfulfilled(p, l_d))
+        writeln("  ", strfmt(l_d, -25), ": Fulfilled = ", strfmt(Fulfilled, 3, 0), 
+                                        ", Outsourced = ", strfmt(Outsourced, 3, 0), 
+                                        ", Unmet = ", strfmt(Unmet, 3, 0), 
+                                        " | Total Demand = ", Demand(p, l_d))
     end-do
 end-do
 
 writeln
-writeln("Consultants Who Travelled for Project Assignments")
+writeln("===== Consultants Who Travelled for Assignments =====")
 forall(p in Projects) do
     projLoc := ProjectLocationNames(ProjectLocations(p))
-
-    forall(h in HomeLocationNames | h <> projLoc, l_a in ConsultantNames, l_d in ConsultantNames) do
-        if getsol(Assign(h, l_a, p, l_d)) > 0.01 then
-            writeln(strfmt(getsol(Assign(h, l_a, p, l_d)), -3), strfmt(l_d, -25), ": ", strfmt(h, -13),  " => ", projLoc, " (Project ", strfmt(p, -2), ")")
+    forall(h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames) do
+        if getsol(Assign(h, l_a, p, l_d)) > 0.01 and h <> projLoc then
+            writeln(strfmt(getsol(Assign(h, l_a, p, l_d)), 3, 0), "  ", strfmt(l_d, -25), ": ", strfmt(h, -13),  " => ", projLoc, " (Project ", strfmt(p, -2), ")")
         end-if
     end-do
 end-do
+
+writeln
+writeln("===== Benched Consultants by Level =====")
+forall(l_d in ConsultantNames) do
+    BenchedConsultants := sum(h in HomeLocationNames) getsol(Bench(h, l_d))
+    writeln(strfmt(l_d, -25), ": ", strfmt(BenchedConsultants, 4, 0))
+end-do
+
+writeln
+writeln("===== How much would profit improve if we needed one fewer consultant? =====")
+forall(p in Projects, l in ConsultantNames) do
+    writeln("Dual of demand constraint (P", p, ", ", l, "): ", getdual(DemandCS(p, l)))
+end-do
+
+
+
+
+declarations
+    mu: real
+    TotalUnfulfilled, TotalOutsourced: real
+end-declarations
+
+! ====================== EXPERIMENT 1: VARY DEMAND ======================
+fopen("demand.csv", F_OUTPUT)
+writeln("DemandVariability,Project,Profit,Level,Unfulfilled,Demand")
+
+mu := -0.55
+repeat
+    DemandVariability := mu
+    forall(l in ConsultantNames) do
+        ClientSatisfactionPenalty(l) := 0
+        OutsourcingCost(l) := 0
+    end-do
+
+    forall(p in Projects, l in ConsultantNames) do
+        AdjustedDemand(p, l) := round(Demand(p, l) * (1 + DemandVariability)) 
+        DemandCS(p, l) := sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l)) Assign(h, l_a, p, l) + Unfulfilled(p, l) = AdjustedDemand(p, l)
+    end-do
+
+    Revenue := sum(p in Projects, l in ConsultantNames)((sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l)) Assign(h, l_a, p, l)) * DailyRate(p, l)) * WorkingDays
+    UnfulfilledPenalty := 0
+    OutsourceCost := 0
+    TotalProfit := Revenue - SalaryCost - TravelCost - UnfulfilledPenalty - OutsourceCost
+    maximize(TotalProfit)
+
+    forall(p in Projects, l in ConsultantNames) do
+        writeln(mu, ",", p, ",", getobjval, ",", l, ",", getsol(Unfulfilled(p,l)), ",", AdjustedDemand(p,l))
+    end-do
+
+    mu := mu + 0.125
+until mu > 1.001
+fclose(F_OUTPUT)
+
+! ====================== EXPERIMENT 2: BENCHING ======================
+fopen("bench.csv", F_OUTPUT)
+writeln("DemandVariability,Profit,Level,Bench")
+
+mu := -0.55
+repeat
+    DemandVariability := mu
+    forall(l in ConsultantNames) do
+        ClientSatisfactionPenalty(l) := 0
+        OutsourcingCost(l) := 0
+    end-do
+
+    forall(p in Projects, l in ConsultantNames) do
+        AdjustedDemand(p, l) := round(Demand(p, l) * (1 + DemandVariability))
+        DemandCS(p, l) := sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l)) Assign(h, l_a, p, l) + Unfulfilled(p, l) = AdjustedDemand(p, l)
+    end-do
+
+    Revenue := sum(p in Projects, l in ConsultantNames)((sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l)) Assign(h, l_a, p, l)) * DailyRate(p, l)) * WorkingDays
+    UnfulfilledPenalty := 0
+    OutsourceCost := 0
+    TotalProfit := Revenue - SalaryCost - TravelCost - UnfulfilledPenalty - OutsourceCost
+    maximize(TotalProfit)
+
+    forall(l in ConsultantNames) do
+        writeln(mu, ",", getobjval, ",", l, ",", sum(h in HomeLocationNames) getsol(Bench(h,l)))
+    end-do
+
+    mu := mu + 0.125
+until mu > 1.001
+fclose(F_OUTPUT)
+
+! ====================== EXPERIMENT 3: VARY OUTSOURCING COST ======================
+fopen("outsourcing.csv", F_OUTPUT)
+writeln("OutsourcingCost,Project,Profit,Level,Unfulfilled,Demand,Outsource")
+
+DemandVariability := 1.0
+mu := 1.0
+repeat
+    forall(l in ConsultantNames) do
+        OutsourcingCost(l) := mu
+        ClientSatisfactionPenalty(l) := 1.0
+    end-do
+
+    forall(p in Projects, l in ConsultantNames) do
+        AdjustedDemand(p, l) := round(Demand(p, l) * (1 + DemandVariability))
+        DemandCS(p, l) := sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l))Assign(h, l_a, p, l) + Outsource(p, l) + Unfulfilled(p, l) = AdjustedDemand(p, l)
+    end-do
+
+    Revenue := sum(p in Projects, l in ConsultantNames)((sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l)) Assign(h, l_a, p, l) + Outsource(p, l)) * DailyRate(p, l)) * WorkingDays
+    UnfulfilledPenalty := sum(p in Projects, l in ConsultantNames) Unfulfilled(p, l) * ClientSatisfactionPenalty(l) * WorkingDays
+    OutsourceCost := sum(p in Projects, l in ConsultantNames) Outsource(p, l) * DailySalary(l) * OutsourcingCost(l) * WorkingDays
+    TotalProfit := Revenue - SalaryCost - TravelCost - UnfulfilledPenalty - OutsourceCost
+    maximize(TotalProfit)
+
+    forall(p in Projects, l in ConsultantNames) do
+        writeln(mu, ",", p, ",", getobjval, ",", l, ",", getsol(Unfulfilled(p,l)), ",", AdjustedDemand(p,l), ",", getsol(Outsource(p,l)))
+    end-do
+
+    mu := mu + 0.125
+until mu > 2.501
+fclose(F_OUTPUT)
+
+! ====================== EXPERIMENT 4: VARY PENALTY ======================
+fopen("penalty.csv", F_OUTPUT)
+writeln("ClientSatisfactionPenalty,Project,Profit,Level,Unfulfilled,Demand,Outsource")
+
+DemandVariability := 1.0
+mu := 0.0
+repeat
+    forall(l in ConsultantNames) do
+        OutsourcingCost(l) := 3.0
+        ClientSatisfactionPenalty(l) := mu
+    end-do
+
+    forall(p in Projects, l in ConsultantNames) do
+        AdjustedDemand(p, l) := round(Demand(p, l) * (1 + DemandVariability))
+        DemandCS(p, l) := sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l)) Assign(h, l_a, p, l) + Outsource(p, l) + Unfulfilled(p, l) = AdjustedDemand(p, l)
+    end-do
+
+    Revenue := sum(p in Projects, l in ConsultantNames)((sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l)) Assign(h, l_a, p, l) + Outsource(p, l)) * DailyRate(p, l)) * WorkingDays
+    UnfulfilledPenalty := sum(p in Projects, l in ConsultantNames) Unfulfilled(p, l) * DailySalary(l) * ClientSatisfactionPenalty(l) * WorkingDays
+    OutsourceCost := sum(p in Projects, l in ConsultantNames) Outsource(p, l) * DailySalary(l) * OutsourcingCost(l) * WorkingDays
+    TotalProfit := Revenue - SalaryCost - TravelCost - UnfulfilledPenalty - OutsourceCost
+    maximize(TotalProfit)
+
+    forall(p in Projects, l in ConsultantNames) do
+        writeln(mu, ",", p, ",", getobjval, ",", l, ",", getsol(Unfulfilled(p,l)), ",", AdjustedDemand(p,l), ",", getsol(Outsource(p,l)))
+    end-do
+
+    mu := mu + 0.125
+until mu > 2.001
+fclose(F_OUTPUT)
+
+! ====================== EXPERIMENT 5: DUAL VALUES ======================
+fopen("duals.csv", F_OUTPUT)
+writeln("Project,Level,DualValue")
+
+DemandVariability := 1.0
+forall(l in ConsultantNames) do
+    ClientSatisfactionPenalty(l) := 1.0
+    OutsourcingCost(l) := 2.0
+end-do
+
+forall(p in Projects, l in ConsultantNames) do
+    AdjustedDemand(p, l) := round(Demand(p, l) * (1 + DemandVariability))
+    DemandCS(p, l) := sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l)) Assign(h, l_a, p, l) + Outsource(p, l) + Unfulfilled(p, l) = AdjustedDemand(p, l)
+end-do
+
+Revenue := sum(p in Projects, l in ConsultantNames)((sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l)) Assign(h, l_a, p, l) + Outsource(p, l)) * DailyRate(p, l)) * WorkingDays
+UnfulfilledPenalty := sum(p in Projects, l in ConsultantNames) Unfulfilled(p, l) * ClientSatisfactionPenalty(l) * WorkingDays
+OutsourceCostTotal := sum(p in Projects, l in ConsultantNames) Outsource(p, l) * DailySalary(l) * OutsourcingCost(l) * WorkingDays
+TotalProfit := Revenue - SalaryCost - TravelCost - UnfulfilledPenalty - OutsourceCostTotal
+maximize(TotalProfit)
+
+forall(p in Projects, l in ConsultantNames) do
+    writeln(p, ",", l, ",", getdual(DemandCS(p, l)))
+end-do
+fclose(F_OUTPUT)
 
 
 end-model
