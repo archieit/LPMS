@@ -58,10 +58,13 @@ DailyRate: [650 516 450 380 205
 ! Stage 2: Strategic Decisions
 
 ! Demand Variability (±X%)
-DemandVariability: 1
+DemandVariability: 0
 
 ! Client Satisfaction Penalty (£ per unfulfilled consultant day of hired OptiConsult Consultants )
-ClientSatisfactionPenalty: ![x  x x x x] !inlcude your new £
+ClientSatisfactionPenaltyOld: [800 800 800 800 800]
+
+! Client Satisfaction Penalty (1.x daily salary)
+ClientSatisfactionPenalty: [0 0 0 0 0]
 
 ! Consultant Preferences (1: Willing to travel, 0: Not willing to travel) 
 !Replace 1 for 0 as needed
@@ -72,7 +75,7 @@ ConsultantPreferences: [1 1 1 1  ! Senior Consulting willing to travel anywhere
                         1 1 1 1] ! Junior Consultant refuses to travel to Ireland
 
 ! Outsourcing Costs (1.x daily salary)
-OutsourcingCost: ![X X X X X]  ! 1.x * DailySalary
+OutsourcingCost: [2.0 2.0 2.0 2.0 2.0]
 
 ! Remote Work Parameters
 RemoteWorkSatisfactionPenalty: !0.00x  ! 0.x% penalty on client satisfaction for remote work
