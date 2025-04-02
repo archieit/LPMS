@@ -73,12 +73,12 @@ ConsultantPreferences: [1 1 1 0  ! Senior Consulting willing to travel anywhere
                         1 1 1 0  ! Senior Consultant refuses to travel to Ireland
                         1 1 1 0  ! Consultant willing to travel anywhere
                         1 1 1 0] ! Junior Consultant refuses to travel to Ireland
-                        
+
 AllowHomeWorking: 1 ! Toggle variable (1 = allow home working, 0 = strict travel preference)
 
 ! Outsourcing Costs (1.x daily salary)
 OutsourcingCost: [2.0 2.0 2.0 2.0 2.0]
 
 ! Remote Work Parameters
-RemoteWorkSatisfactionPenalty: !0.00x  ! 0.x% penalty on client satisfaction for remote work
-MaximumPenaltyClientSatisfaction: !0.x ! X% maximum penalty on client satisfaction for remote work
+RemoteWorkSatisfactionPenalty: 0.6
+MaximumPenaltyClientSatisfaction: 3
