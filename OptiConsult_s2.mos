@@ -26,7 +26,6 @@ declarations
     ConsultantPreferences: array(ConsultantNames, ProjectLocationNames) of integer
     AllowHomeWorking: integer
     RemoteWorkSatisfactionPenalty: real
-    MaximumPenaltyClientSatisfaction: real
 
     Assign: array(HomeLocationNames, ConsultantNames, Projects, ConsultantNames) of mpvar
     Bench: array(HomeLocationNames, ConsultantNames) of mpvar
@@ -40,7 +39,7 @@ initializations from "OptiConsult_s2.dat"
     ConsultantsByHomeLocationAndLevel TravelCosts ProjectLocations
     Demand DailyRate DemandVariability ClientSatisfactionPenalty 
     OutsourcingCost ConsultantPreferences AllowHomeWorking
-    RemoteWorkSatisfactionPenalty MaximumPenaltyClientSatisfaction
+    RemoteWorkSatisfactionPenalty
 end-initializations
 
 ! Hierarchy levels
