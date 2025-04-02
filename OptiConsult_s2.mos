@@ -401,4 +401,30 @@ writeln("Type,Project,Consultant Role,Home Location,Assigned Role,Allocation Loc
     TotalProfit := Revenue - SalaryCost - TravelCost - UnfilledPenalty - OutsourceCost
     maximize(TotalProfit)
 
+    ! Write assignment details
+    forall(p in Projects) do
+        forall(h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames) do
+            if getsol(Assign(h, l_a, p, l_d)) > 0 then
+                writeln("Assignment,",p,",",l_a,",",h,",",l_d,",",ProjectLocationNames(ProjectLocations(p)),",",strfmt(getsol(Assign(h, l_a, p, l_d)),0,2),",",DailyRate(p, l_d),",",DailySalary(l_a),",",TravelCosts(ProjectLocationNames(ProjectLocations(p)), h))
+            end-if
+        end-do
+    end-do
+
+    ! Write bench details
+    forall(h in HomeLocationNames, l_a in ConsultantNames) do
+        if getsol(Bench(h, l_a)) > 0 then
+            writeln("Bench,,",l_a,",",h,",,,",strfmt(getsol(Bench(h, l_a)),0,2),",,", DailySalary(l_a),",0")
+        end-if
+    end-do
+
+    ! Write summary section
+    writeln
+    writeln("SUMMARY")
+    writeln("Total Revenue,", getsol(Revenue))
+    writeln("Total Salary Cost,", getsol(SalaryCost))
+    writeln("Total Travel Cost,", getsol(TravelCost))
+    writeln("Total Profit,", getobjval)
+    
+fclose(F_OUTPUT)
+
 end-model
