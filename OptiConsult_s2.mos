@@ -392,7 +392,7 @@ end-do
 
 ! Recalculate objective
 Revenue := sum(p in Projects, l in ConsultantNames)(sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l) and ConsultantPreferences(l_a, ProjectLocationNames(ProjectLocations(p))) = 1) Assign(h, l_a, p, l) * DailyRate(p, l)) * WorkingDays
-TravelCost := sum(p in Projects, h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d) and ConsultantPreferences(l_a, ProjectLocationNames(ProjectLocations(p))) = 1) Assign(h, l_a, p, l_d) * TravelCosts(ProjectLocationNames(ProjectLocations(p)), h)
+TravelCost := sum(p in Projects, h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d) and ConsultantPreferences(l_a, ProjectLocationNames(ProjectLocations(p))) = 1)  (Assign(h, l_a, p, l_d) * TravelCosts(ProjectLocationNames(ProjectLocations(p)), h))
 UnfilledPenalty := 0
 OutsourceCost := 0
 TotalProfit := Revenue - SalaryCost - TravelCost - UnfilledPenalty - OutsourceCost
@@ -447,7 +447,7 @@ end-do
 RevenueWorkFromHome := sum(p in Projects, l_d in ConsultantNames, h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d) and ConsultantPreferences(l_a, ProjectLocationNames(ProjectLocations(p))) = 0) Assign(h, l_a, p, l_d) * (RemoteWorkSatisfactionPenalty * DailyRate(p, l_d)) * WorkingDays
 RevenueOnSite := sum(p in Projects, l_d in ConsultantNames, h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d) and ConsultantPreferences(l_a, ProjectLocationNames(ProjectLocations(p))) <> 0) Assign(h, l_a, p, l_d) * DailyRate(p, l_d) * WorkingDays
 Revenue := RevenueWorkFromHome + RevenueOnSite
-TravelCost := sum(p in Projects, h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d) and ConsultantPreferences(l_a, ProjectLocationNames(ProjectLocations(p))) = 1) Assign(h, l_a, p, l_d) * TravelCosts(ProjectLocationNames(ProjectLocations(p)), h)
+TravelCost := sum(p in Projects, h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d) and ConsultantPreferences(l_a, ProjectLocationNames(ProjectLocations(p))) = 1)  (Assign(h, l_a, p, l_d) * TravelCosts(ProjectLocationNames(ProjectLocations(p)), h))
 UnfilledPenalty := 0
 OutsourceCost := 0
 TotalProfit := Revenue - SalaryCost - TravelCost - UnfilledPenalty - OutsourceCost
