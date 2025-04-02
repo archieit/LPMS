@@ -1,0 +1,189 @@
+model OptiConsult_notravel
+uses "mmxprs"
+
+declarations
+    NumProjects = 13
+    Projects = 1..NumProjects
+
+    ConsultantNames: set of string
+    HomeLocationNames: set of string
+    ProjectLocationNames: set of string
+
+    TotalConsultants: array(ConsultantNames) of integer
+    DailySalary: array(ConsultantNames) of real
+    BenchLimits: array(ConsultantNames) of real
+    Hierarchy: array(ConsultantNames) of integer
+    WorkingDays: integer
+    TotalTravelBudget: real
+
+    ConsultantsByHomeLocationAndLevel: array(ProjectLocationNames, ConsultantNames) of integer
+    TravelCosts: array(ProjectLocationNames, ProjectLocationNames) of integer
+    ProjectLocations: array(Projects) of integer
+    Demand: array(Projects, ConsultantNames) of integer
+    DailyRate: array(Projects, ConsultantNames) of integer
+    
+    DemandVariability: real
+    ClientSatisfactionPenalty: array(ConsultantNames) of integer
+    ConsultantPreferences: array(ConsultantNames, ProjectLocationNames) of integer
+    OutsourcingCost: array(ConsultantNames) of real
+    RemoteWorkSatisfactionPenalty: real
+    MaximumPenaltyClientSatisfaction: real
+
+    Assign: array(HomeLocationNames, ConsultantNames, Projects, ConsultantNames) of mpvar
+    Bench: array(HomeLocationNames, ConsultantNames) of mpvar
+end-declarations
+
+initializations from "OptiConsult_s2.dat"
+    ConsultantNames HomeLocationNames ProjectLocationNames
+    TotalConsultants DailySalary BenchLimits WorkingDays TotalTravelBudget
+    ConsultantsByHomeLocationAndLevel TravelCosts ProjectLocations
+    Demand DailyRate
+    DemandVariability ClientSatisfactionPenalty ConsultantPreferences
+    OutsourcingCost RemoteWorkSatisfactionPenalty MaximumPenaltyClientSatisfaction
+end-initializations
+
+! Hierarchy levels
+Hierarchy("Senior Consulting Manager") := 1
+Hierarchy("Consulting Manager") := 2
+Hierarchy("Senior Consultant") := 3
+Hierarchy("Consultant") := 4
+Hierarchy("Junior Consultant") := 5
+
+! --- Objective: maximise profit ---
+
+! l_d is what they are assigned to, l_a is their actual role
+
+! Revenue: consultants generate revenue based on the role they are fulfilling
+
+Revenue := sum(p in Projects, l_d in ConsultantNames)(sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d) and ConsultantPreferences(l_a, ProjectLocationNames(ProjectLocations(p))) = 1) Assign(h, l_a, p, l_d) * DailyRate(p, l_d)) * WorkingDays
+
+! Salary: based on consultants' actual levels
+SalaryCost := sum(c in ConsultantNames) TotalConsultants(c) * DailySalary(c) * WorkingDays
+
+! Travel cost: only if project location differs from home location
+TravelCost := sum(p in Projects, h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d) and ConsultantPreferences(l_a, ProjectLocationNames(ProjectLocations(p))) = 1)  (Assign(h, l_a, p, l_d) * TravelCosts(ProjectLocationNames(ProjectLocations(p)), h))
+
+TotalProfit := Revenue - SalaryCost - TravelCost
+
+! --- Constraints ---
+
+! 1. Supply: each consultant must be assigned to a role or benched
+forall(h in HomeLocationNames, l_a in ConsultantNames) do
+    SupplyCS(h, l_a) := sum(p in Projects, l_d in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d) and ConsultantPreferences(l_a, ProjectLocationNames(ProjectLocations(p))) = 1) Assign(h, l_a, p, l_d) + Bench(h, l_a) = ConsultantsByHomeLocationAndLevel(h, l_a)
+end-do
+
+! 2. Bench limit (except Junior Consultants who have limit 1)
+forall(h in HomeLocationNames, l_a in ConsultantNames) do
+    BenchLimitCS(h, l_a) := Bench(h, l_a) <= BenchLimits(l_a) * ConsultantsByHomeLocationAndLevel(h, l_a)
+end-do
+
+! 3. Demand cap: don’t overfill any project role
+forall(p in Projects, l_d in ConsultantNames) do
+    DemandCS(p, l_d) := sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d) and ConsultantPreferences(l_a, ProjectLocationNames(ProjectLocations(p))) = 1) Assign(h, l_a, p, l_d) <= Demand(p, l_d)
+end-do
+
+! 4. Travel budget constraint
+TravelBudgetCS := TravelCost <= TotalTravelBudget
+
+! 5 Only send consultants to places they are willing to go
+!forall(h in HomeLocationNames, l_a in ConsultantNames, p in Projects, l_d in ConsultantNames) do
+ !  if ConsultantPreferences(l_a, ProjectLocationNames(ProjectLocations(p))) = 1 then Assign(h, l_a, p, l_d) = 0
+  !  end-if
+!end-do
+
+
+! Enforce integer constraints
+forall(h in HomeLocationNames, l_a in ConsultantNames, p in Projects, l_d in ConsultantNames) do
+    Assign(h, l_a, p, l_d) is_integer
+end-do
+
+
+! --- Solve ---
+maximize(TotalProfit)
+
+writeln
+writeln("Total Revenue: £", getsol(Revenue))
+writeln("Total Salary Cost: £", getsol(SalaryCost))
+writeln("Total Travel Cost: £", getsol(TravelCost))
+writeln("Total Profit: £", getobjval)
+
+writeln
+writeln("Consultant Allocations by Project")
+forall(p in Projects) do
+    writeln("Project ", p,  " (", ProjectLocationNames(ProjectLocations(p)), "):")
+    forall(h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames) do
+        if getsol(Assign(h, l_a, p, l_d)) > 0.001 then
+            writeln("  ", strfmt(getsol(Assign(h, l_a, p, l_d)), -3), strfmt(l_a, -25), " => ", strfmt(l_d, -25), " (", h, ")")
+        end-if
+    end-do
+end-do
+
+writeln
+writeln("Demand Fulfilment by Project and Level")
+forall(p in Projects) do
+    writeln("Project ", p, ":")
+    forall(l_d in ConsultantNames) do
+        Fulfilled := sum(h in HomeLocationNames, l_a in ConsultantNames)
+                        getsol(Assign(h, l_a, p, l_d))
+        writeln("  ", strfmt(l_d, -25), ": ", strfmt(Fulfilled, -2), " of ", Demand(p, l_d))
+    end-do
+end-do
+
+writeln
+writeln("Consultants Who Travelled for Project Assignments")
+forall(p in Projects) do
+    projLoc := ProjectLocationNames(ProjectLocations(p))
+
+    forall(h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames) do
+        if getsol(Assign(h, l_a, p, l_d)) > 0.01 then
+            writeln(strfmt(getsol(Assign(h, l_a, p, l_d)), -3), strfmt(l_d, -25), ": ", strfmt(h, -13),  " => ", projLoc, " (Project ", strfmt(p, -2), ")")
+        end-if
+    end-do
+end-do
+
+writeln
+writeln("Benched Consultants")
+forall(l_a in ConsultantNames) do
+  BenchedConsultants := sum(l in HomeLocationNames) getsol(Bench(l, l_a))
+  writeln(BenchedConsultants, " ", strfmt(l_a, -25))
+end-do
+
+writeln(SalaryCost)
+
+fopen("ConsultantAllocation_TravelRestrictions.csv", F_OUTPUT)
+
+maximize(TotalProfit)
+! Write headers
+writeln("Type,Project,Consultant Role,Home Location,Assigned Role,Allocation Location,Quantity,Daily Rate,Daily Salary,Travel Cost")
+
+! Write assignment details
+forall(p in Projects) do
+  forall(h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames) do
+    if getsol(Assign(h, l_a, p, l_d)) > 0 then
+      writeln("Assignment,",p,",",l_a,",",h,",",l_d,",",ProjectLocationNames(ProjectLocations(p)),",",
+              strfmt(getsol(Assign(h, l_a, p, l_d)),0,2),",",
+              DailyRate(p, l_d),",",DailySalary(l_a),",",
+              TravelCosts(ProjectLocationNames(ProjectLocations(p)), h))
+    end-if
+  end-do
+end-do
+
+! Write bench details
+forall(h in HomeLocationNames, l_a in ConsultantNames) do
+  if getsol(Bench(h, l_a)) > 0 then
+    writeln("Bench,,",l_a,",",h,",,,",strfmt(getsol(Bench(h, l_a)),0,2),",,",
+            DailySalary(l_a),",0")
+  end-if
+end-do
+
+! Write summary section
+writeln
+writeln("SUMMARY")
+writeln("Total Revenue,", getsol(Revenue))
+writeln("Total Salary Cost,", getsol(SalaryCost))
+writeln("Total Travel Cost,", getsol(TravelCost))
+writeln("Total Profit,", getobjval)
+
+fclose(F_OUTPUT)
+end-model
+
