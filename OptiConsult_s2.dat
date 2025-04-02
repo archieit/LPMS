@@ -68,11 +68,13 @@ ClientSatisfactionPenalty: [0 0 0 0 0]
 
 ! Consultant Preferences (1: Willing to travel, 0: Not willing to travel) 
 !Replace 1 for 0 as needed
-ConsultantPreferences: [1 1 1 1  ! Senior Consulting willing to travel anywhere
-                        1 1 1 1  ! Consulting Manager willing to travel anywhere
-                        1 1 1 1  ! Senior Consultant refuses to travel to Ireland
-                        1 1 1 1  ! Consultant willing to travel anywhere
-                        1 1 1 1] ! Junior Consultant refuses to travel to Ireland
+ConsultantPreferences: [1 1 1 0  ! Senior Consulting willing to travel anywhere
+                        1 1 1 0  ! Consulting Manager willing to travel anywhere
+                        1 1 1 0  ! Senior Consultant refuses to travel to Ireland
+                        1 1 1 0  ! Consultant willing to travel anywhere
+                        1 1 1 0] ! Junior Consultant refuses to travel to Ireland
+                        
+AllowHomeWorking: 1 ! Toggle variable (1 = allow home working, 0 = strict travel preference)
 
 ! Outsourcing Costs (1.x daily salary)
 OutsourcingCost: [2.0 2.0 2.0 2.0 2.0]
