@@ -55,12 +55,17 @@ Hierarchy("Junior Consultant") := 5
 
 ! Revenue: consultants generate revenue based on the role they are fulfilling
 
+!!!! This bit is saying that ConsultantPreferences(l_a, ProjectLocationNames(ProjectLocations(p))) = 1, 
+they want to travel there and so we assign them and if ConsultantPreferences(l_a, ProjectLocationNames(ProjectLocations(p))) = 0,
+they do not want to travel and so we don't assign them. This restraint is used in many places (i will mark with a !HERE!)
+
 Revenue := sum(p in Projects, l_d in ConsultantNames)(sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d) and ConsultantPreferences(l_a, ProjectLocationNames(ProjectLocations(p))) = 1) Assign(h, l_a, p, l_d) * DailyRate(p, l_d)) * WorkingDays
 
 ! Salary: based on consultants' actual levels
 SalaryCost := sum(c in ConsultantNames) TotalConsultants(c) * DailySalary(c) * WorkingDays
 
 ! Travel cost: only if project location differs from home location
+!HERE!
 TravelCost := sum(p in Projects, h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d) and ConsultantPreferences(l_a, ProjectLocationNames(ProjectLocations(p))) = 1)  (Assign(h, l_a, p, l_d) * TravelCosts(ProjectLocationNames(ProjectLocations(p)), h))
 
 TotalProfit := Revenue - SalaryCost - TravelCost
@@ -68,6 +73,7 @@ TotalProfit := Revenue - SalaryCost - TravelCost
 ! --- Constraints ---
 
 ! 1. Supply: each consultant must be assigned to a role or benched
+!HERE!
 forall(h in HomeLocationNames, l_a in ConsultantNames) do
     SupplyCS(h, l_a) := sum(p in Projects, l_d in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d) and ConsultantPreferences(l_a, ProjectLocationNames(ProjectLocations(p))) = 1) Assign(h, l_a, p, l_d) + Bench(h, l_a) = ConsultantsByHomeLocationAndLevel(h, l_a)
 end-do
@@ -78,19 +84,13 @@ forall(h in HomeLocationNames, l_a in ConsultantNames) do
 end-do
 
 ! 3. Demand cap: don’t overfill any project role
+!HERE!
 forall(p in Projects, l_d in ConsultantNames) do
     DemandCS(p, l_d) := sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d) and ConsultantPreferences(l_a, ProjectLocationNames(ProjectLocations(p))) = 1) Assign(h, l_a, p, l_d) <= Demand(p, l_d)
 end-do
 
 ! 4. Travel budget constraint
 TravelBudgetCS := TravelCost <= TotalTravelBudget
-
-! 5 Only send consultants to places they are willing to go
-!forall(h in HomeLocationNames, l_a in ConsultantNames, p in Projects, l_d in ConsultantNames) do
- !  if ConsultantPreferences(l_a, ProjectLocationNames(ProjectLocations(p))) = 1 then Assign(h, l_a, p, l_d) = 0
-  !  end-if
-!end-do
-
 
 ! Enforce integer constraints
 forall(h in HomeLocationNames, l_a in ConsultantNames, p in Projects, l_d in ConsultantNames) do
