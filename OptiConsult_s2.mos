@@ -328,7 +328,6 @@ fclose(F_OUTPUT)
 fopen("travel.csv", F_OUTPUT)
 writeln("Type,Project,Consultant Role,Home Location,Assigned Role,Allocation Location,Quantity,Daily Rate,Daily Salary,Travel Cost")
 
-
     forall(l in ConsultantNames) do
         ClientSatisfactionPenalty(l) := 0
         OutsourcingCost(l) := 0
@@ -341,8 +340,13 @@ writeln("Type,Project,Consultant Role,Home Location,Assigned Role,Allocation Loc
     forall(p in Projects, l in ConsultantNames) do
         DemandCS(p, l) := sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l) and ConsultantPreferences(l_a, ProjectLocationNames(ProjectLocations(p))) = 1) Assign(h, l_a, p, l) <= Demand(p, l)
     end-do
+    
+    forall(h in HomeLocationNames, l_a in ConsultantNames, p in Projects, l_d in ConsultantNames) do
+        Assign(h, l_a, p, l_d) is_integer
+    end-do
 
     Revenue := sum(p in Projects, l in ConsultantNames)(sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l) and ConsultantPreferences(l_a, ProjectLocationNames(ProjectLocations(p))) = 1) Assign(h, l_a, p, l) * DailyRate(p, l)) * WorkingDays
+    TravelCost := sum(p in Projects, h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d) and ConsultantPreferences(l_a, ProjectLocationNames(ProjectLocations(p))) = 1)  (Assign(h, l_a, p, l_d) * TravelCosts(ProjectLocationNames(ProjectLocations(p)), h))
     UnfilledPenalty := 0
     OutsourceCost := 0
     TotalProfit := Revenue - SalaryCost - TravelCost - UnfilledPenalty - OutsourceCost
@@ -376,7 +380,7 @@ fclose(F_OUTPUT)
 
 ! ====================== EXPERIMENT 7: HOME WORKING ======================
 fopen("home.csv", F_OUTPUT)
-writeln("Type,Project,Consultant Role,Home Location,Assigned Role,Allocation Location,Quantity,Daily Rate,Daily Salary,Travel Cost")
+writeln("Type,Project,Consultant Role,Home Location,Assigned Role,Allocation Location,Quantity,Daily Rate,Daily Salary,Travel Cost,WFH")
 
     forall(l in ConsultantNames) do
         ClientSatisfactionPenalty(l) := 0
@@ -395,16 +399,23 @@ writeln("Type,Project,Consultant Role,Home Location,Assigned Role,Allocation Loc
         DemandCS(p, l) := sum(h in HomeLocationNames, l_a in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l)) Assign(h, l_a, p, l) <= Demand(p, l)
     end-do
 
+    TravelCost := sum(p in Projects, h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames | Hierarchy(l_a) <= Hierarchy(l_d) and ConsultantPreferences(l_a, ProjectLocationNames(ProjectLocations(p))) = 1)  (Assign(h, l_a, p, l_d) * TravelCosts(ProjectLocationNames(ProjectLocations(p)), h))
     UnfilledPenalty := 0
     OutsourceCost := 0
     TotalProfit := Revenue - SalaryCost - TravelCost - UnfilledPenalty - OutsourceCost
     maximize(TotalProfit)
-
-    ! Write assignment details
+    
     forall(p in Projects) do
+    loc := ProjectLocationNames(ProjectLocations(p))
         forall(h in HomeLocationNames, l_a in ConsultantNames, l_d in ConsultantNames) do
-            if getsol(Assign(h, l_a, p, l_d)) > 0 then
-                writeln("Assignment,",p,",",l_a,",",h,",",l_d,",",ProjectLocationNames(ProjectLocations(p)),",",strfmt(getsol(Assign(h, l_a, p, l_d)),0,2),",",DailyRate(p, l_d),",",DailySalary(l_a),",",TravelCosts(ProjectLocationNames(ProjectLocations(p)), h))
+            if ConsultantPreferences(l_a, loc) = 0 then
+                if getsol(Assign(h, l_a, p, l_d)) > 0 then
+                    writeln("Assignment,",p,",",l_a,",",h,",",l_d,",",ProjectLocationNames(ProjectLocations(p)),",",strfmt(getsol(Assign(h, l_a, p, l_d)),0,2),",",DailyRate(p, l_d),",",DailySalary(l_a),",",TravelCosts(ProjectLocationNames(ProjectLocations(p)), h),",", "Yes")
+                end-if
+            else            
+                if getsol(Assign(h, l_a, p, l_d)) > 0 then
+                    writeln("Assignment,",p,",",l_a,",",h,",",l_d,",",ProjectLocationNames(ProjectLocations(p)),",",strfmt(getsol(Assign(h, l_a, p, l_d)),0,2),",",DailyRate(p, l_d),",",DailySalary(l_a),",",TravelCosts(ProjectLocationNames(ProjectLocations(p)), h),",", "No")
+                end-if
             end-if
         end-do
     end-do
